@@ -1,75 +1,148 @@
+version: '3'
 services:
-    prometheus:
-        image: prom/prometheus
-        container_name: prometheus
-        command:
-            - '--config.file=/etc/prometheus/prometheus.yml'
-        ports:
-            - 9090:9090
-        restart: unless-stopped
-        volumes:
-            - ./prometheus:/etc/prometheus:ro
-            - prom_data:/prometheus:rw
-        networks:
-            back-tier:
-                alias:
-                    - database
-            admin:
-                alias:
-                    - mysql
-            undefined:
-                alias:
-                    - unknown
-    grafana:
-        image: grafana/grafana
-        container_name: grafana
-        ports:
-            - target: 80
-              host_ip: 127.0.0.1
-              published: 8080
-              protocol: tcp
-              mode: host
-            - target: 8000
-              host_ip: 127.0.0.1
-              published: 8000-9000
-              protocol: tcp
-              mode: host
-        restart: unless-stopped
-        environment:
-            - GF_SECURITY_ADMIN_USER=admin
-            - GF_SECURITY_ADMIN_PASSWORD=grafana
-        volumes:
-            - type: volume
-              source: ./grafana
-              target: /etc/grafana/provisioning/datasources
-              read_only: true
-              volume:
-                - nocopy: true
-        networks:
-            - front-tier:
-                alias:
-                    - ui
-            - back-tier:
-    datadog:
-        image: datadog/datadog
-volumes:
-    prom_data:
+  postgres-airflow:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: pssd
+      POSTGRES_USER : airflowuser
+      POSTGRES_DB : airflowdb
+      AIRFLOW_SCHEMA: airflow
+    expose:
+      - 5432
+    restart: always
+    volumes:
+      - ./scripts_postgres:/docker-entrypoint-initdb.d
+      # - ./sample_data:/sample_data
+    networks:
+      - common_network
+
+  postgres-dbt:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: pssd
+      POSTGRES_USER : dbtuser
+      POSTGRES_DB : dbtdb
+      DBT_SCHEMA: dbt
+      DBT_RAW_DATA_SCHEMA: dbt_raw_data
+    expose:
+      - 5432
+    restart: always
+    volumes:
+      - ./sample_data:/sample_data
+    networks:
+      - common_network
+
+  airflow:
+    build: .
+    restart: always
+    environment: 
+      DBT_PROFILES_DIR: /dbt
+      AIRFLOW_HOME: /airflow
+      PYTHON_DEPS: flask-session==0.3.2
+      AIRFLOW__CORE__DAGS_FOLDER: /airflow/dags
+      AIRFLOW__CORE__PARALLELISM: 4
+      AIRFLOW__CORE__DAG_CONCURRENCY: 4
+      AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 4
+      # AIRFLOW__ADMIN__HIDE_SENSITIVE_VARIABLE_FIELDS: False
+      # Postgres details need to match with the values defined in the postgres-airflow service
+      POSTGRES_USER: airflowuser
+      POSTGRES_PASSWORD: pssd
+      POSTGRES_HOST: postgres-airflow
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: airflowdb
+      # postgres-dbt connection details. Required for the inital loading of seed data
+      # Credentials need to match with service postgres-dbt
+      DBT_POSTGRES_PASSWORD: pssd
+      DBT_POSTGRES_USER : dbtuser
+      DBT_POSTGRES_DB : dbtdb
+      DBT_DBT_SCHEMA: dbt
+      DBT_DBT_RAW_DATA_SCHEMA: dbt_raw_data
+      DBT_POSTGRES_HOST: postgres-dbt
+    depends_on:
+      - postgres-airflow
+      - postgres-dbt
+    ports:
+      - 8000:8080
+    volumes:
+      - ./dbt:/dbt
+      - ./airflow:/airflow
+    networks:
+      - common_network
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - postgres-airflow
+      - postgres-dbt
+    networks:
+      - common_network
+
+  nodeapp:
+    build: ./dapr/node
+    ports:
+      - "50002:50002"
+    depends_on:
+      - redis
+      - placement
+    networks:
+      - common_network
+  nodeapp-dapr:
+    image: "daprio/daprd:edge"
+    command: ["./daprd",
+      "-app-id", "nodeapp",
+      "-app-port", "3000",
+      "-placement-host-address", "placement:50006",
+      "-dapr-grpc-port", "50002",
+      "-components-path", "/components"]
+    volumes:
+        - "./dapr/components/:/components"
+    depends_on:
+      - nodeapp
+    network_mode: "service:nodeapp"
+  ############################
+  # Python app + Dapr sidecar
+  ############################
+  pythonapp:
+    build: ./dapr/python
+    depends_on:
+      - redis
+      - placement
+    networks:
+      - common_network
+  pythonapp-dapr:
+    image: "daprio/daprd:edge"
+    command: ["./daprd",
+      "-app-id", "pythonapp",
+      "-placement-host-address", "placement:50006",
+      "-components-path", "/components"]
+    volumes:
+      - "./dapr/components/:/components"
+    depends_on:
+      - pythonapp
+    network_mode: "service:pythonapp"
+    ############################
+  # Dapr placement service
+  ############################
+  placement:
+    image: "daprio/dapr"
+    command: ["./placement", "-port", "50006"]
+    ports:
+      - "50006:50006"
+    networks:
+      - common_network
+  ############################
+  # Redis state store
+  ############################
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6380:6379"
+    networks:
+      - common_network
+
 networks:
-    front-tier:
-        external: true
-        name: front-end-net
-        driver: overlay
-    back-tier:
-        name: back-end-net
-        internal: true
-        labels:
-            - "com.example.description=Financial transaction network"
-            - "com.example.department=Finance"
-            - "com.example-label-with-empty-value"
-    admin:
-        attachable: true
-        enable_ipv6: false
-        labels:
-            com.example.description: "Financial transaction network"
-            com.example.department: "Finance"
-            com.example.label-with-empty-value: ""
+  common_network:
+
