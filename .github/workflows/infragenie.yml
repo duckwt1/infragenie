@@ -1,0 +1,13 @@
+on: [push]
+
+# Write permissions are required to commit the diagram to the repository
+permissions:
+  contents: write
+
+jobs:
+  update-architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Rikenunes8/infragenie-ghaction@master
+        with:
+          access_token: ${{ secrets.GITHUB_TOKEN }}
