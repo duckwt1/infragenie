@@ -8,6 +8,13 @@ jobs:
   update-architecture:
     runs-on: ubuntu-latest
     steps:
-      - uses: Rikenunes8/infragenie-ghaction@master
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Debug GitHub Action
+        run: echo "Testing access to infragenie-ghaction"
+
+      - name: Run infragenie action
+        uses: Rikenunes8/infragenie-ghaction@v1.0.0
         with:
           access_token: ${{ secrets.GITHUB_TOKEN }}
