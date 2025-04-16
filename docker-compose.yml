@@ -1,62 +1,43 @@
-version: "3.1"
-   
+#
+version: '3.1'
+
+networks:
+  default:
+    internal: true
+  traefik:
+    name: ${TRAEFIK_NETWORK}
+    external: true
+
 services:
-
-  nginx:
-    container_name: nginx
-    build: ./nginx
-    ports:
-      - 80:80
-    depends_on:
-      - "web"
-    volumes:
-      - ./media/:/superb/media/
-      - ./static/:/superb/static/
-
-  postgres:
-    container_name: postgres
-    image: postgres:15-alpine
-    restart: always
-    ports:
-      - 5432:5432
-    volumes:
-      - ./postgresdb:/var/lib/postgresql/data
-    env_file:
-      - .env
+  keycloak:
+    image: gerzhan/moneyfan-keycloak:latest
+    container_name: keycloak
+    #ports:
+    #  - "9080:8080"
+    #  - "7443:8443"
+    networks:
+      - traefik
+    command: "start --optimized --proxy edge"
     environment:
-      - POSTGRES_DB=postgresdb
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=12345
-      - VIRTUAL_HOST=postgresdb
-      - VIRTUAL_PORT=5432
-
-  redisdb:
-    container_name: redisdb
-    image: redis
-    ports:
-      - 6379:6379
-
-  web:
-    container_name: web
-    build: .
-    volumes:
-      - ./media:/superb/media
-    ports:
-      - 8000:8000
-    command: gunicorn SuperB.wsgi:application --bind 0.0.0.0:8000
-    depends_on:
-      - "postgres"
-    env_file: .env
-  
-  celery:
-    container_name: celery
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    volumes: 
-      - ./media:/superb/media
-    command: celery -A SuperB worker --beat --scheduler django --loglevel=info
-    depends_on: 
-      - "postgres"
-      - "redisdb"
-    env_file: .env
+      - KEYCLOAK_ADMIN=${KC_ADMIN}
+      - KEYCLOAK_ADMIN_PASSWORD=${KC_ADMIN_PASSWORD}
+      - KC_DB_URL=${KC_DB_URL}
+      - KC_DB_USERNAME=${KC_DB_USERNAME:-moneyfan}
+      - KC_DB_PASSWORD=${KC_DB_PASSWORD}
+      - KC_DB_SCHEMA=${KC_DB_SCHEMA:-keycloak}
+      - KC_HOSTNAME=sso.${DNS_DOMAIN}
+      - KC_PROXY=${KC_PROXY:-edge}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.moneyfan-keycloak.entrypoints=web,websecure
+      - traefik.http.routers.moneyfan-keycloak.rule=Host(`sso.${DNS_DOMAIN}`)
+      - traefik.http.routers.moneyfan-keycloak.service=moneyfan-keycloak-service
+      - traefik.http.routers.moneyfan-keycloak.tls=true
+      - traefik.http.routers.moneyfan-keycloak.tls.certresolver=production
+      - traefik.http.services.moneyfan-keycloak-service.loadbalancer.server.port=8080
