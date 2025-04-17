@@ -1,13 +1,16 @@
 on: [push]
+  
 
-# Write permissions are required to commit the diagram to the repository
 permissions:
   contents: write
 
 jobs:
   update-architecture:
     runs-on: ubuntu-latest
+    name: Update archtiecture diagram
     steps:
-      - uses: Rikenunes8/infragenie-ghaction@master
+      - name: Invoke infragenie to commit the diagram
+        uses: Rikenunes8/infragenie-ghaction@master
         with:
           access_token: ${{ secrets.GITHUB_TOKEN }}
+          host: 'https://infragenie.eu'
