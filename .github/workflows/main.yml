@@ -1,4 +1,10 @@
-on: [workflow_dispatch, push]
+name: Update Architecture Diagram
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -6,14 +12,26 @@ permissions:
 jobs:
   update-architecture:
     runs-on: ubuntu-latest
-    name: Update architecture diagram
+    name: Update Architecture Diagram
+
     steps:
+      # Step 1: Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Step 2: Ensure host URL is reachable (debugging step)
       - name: Debugging Host Availability
         run: |
           curl -I https://infragenie.eu || exit 1
+
+      # Step 3: Run the infragenie action
       - name: Invoke infragenie to commit the diagram
         uses: Rikenunes8/infragenie-ghaction@master
         with:
           access_token: ${{ secrets.GITHUB_TOKEN }}
           host: 'https://infragenie.eu'
           branch: test-action
+
+      # Step 4: Post-run (optional)
+      - name: Notify on Success
+        run: echo "Architecture diagram updated successfully!"
