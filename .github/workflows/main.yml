@@ -1,39 +1,13 @@
-name: Update Architecture Diagram
+on: [push]
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-
+# Write permissions are required to commit the diagram to the repository
 permissions:
   contents: write
 
 jobs:
   update-architecture:
     runs-on: ubuntu-latest
-    name: Update Architecture Diagram
-
     steps:
-      # Step 1: Checkout the repository
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      # Step 2: Debugging Host Availability and Inputs
-      - name: Debugging Host Availability
-        run: |
-          curl -I -k https://infragenie.eu || exit 1
-      - name: Debugging Action Inputs
-        run: |
-          echo "Access token: ${{ secrets.GITHUB_TOKEN }}"
-          echo "Host: https://infragenie.eu"
-          echo "Branch: test-action"
-          echo "Repository: duckwt1/infragenie"
-
-      # Step 3: Run the infragenie action
-      - name: Invoke infragenie to commit the diagram
-        uses: Rikenunes8/infragenie-ghaction@master
+      - uses: Rikenunes8/infragenie-ghaction@master
         with:
           access_token: ${{ secrets.GITHUB_TOKEN }}
-          host: 'https://infragenie.eu'
-          branch: test-action
