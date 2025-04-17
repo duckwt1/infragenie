@@ -1,16 +1,13 @@
-on: [workflow_dispatch, push]
+on: [push]
 
+# Write permissions are required to commit the diagram to the repository
 permissions:
   contents: write
 
 jobs:
   update-architecture:
     runs-on: ubuntu-latest
-    name: Update architecture diagram
     steps:
-      - name: Invoke infragenie to commit the diagram
-        uses: Rikenunes8/infragenie-ghaction@master
+      - uses: Rikenunes8/infragenie-ghaction@master
         with:
           access_token: ${{ secrets.GITHUB_TOKEN }}
-          host: '${{ secrets.NGROK_URL }}' # Use a secret for the Ngrok URL
-          branch: test-action
