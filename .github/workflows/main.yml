@@ -10,7 +10,7 @@ jobs:
     steps:
       - name: Debugging Host Availability
         run: |
-          curl -I https://infragenie.eu || exit 1
+          curl -k -I https://infragenie.eu || exit 1
       - name: Invoke infragenie to commit the diagram
         uses: Rikenunes8/infragenie-ghaction@master
         with:
