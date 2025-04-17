@@ -1,0 +1,17 @@
+on: [workflow_dispatch, push]
+  
+
+permissions:
+  contents: write
+
+jobs:
+  update-architecture:
+    runs-on: ubuntu-latest
+    name: Update archtiecture diagram
+    steps:
+      - name: Invoke infragenie to commit the diagram
+        uses: Rikenunes8/infragenie-ghaction@master
+        with:
+          access_token: ${{ secrets.GITHUB_TOKEN }}
+          host: 'https://305c-89-152-88-137.ngrok-free.app'
+          branch: test-action
