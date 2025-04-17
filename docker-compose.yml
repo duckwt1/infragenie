@@ -1,18 +1,166 @@
-version: '2'
+version: '3'
 services:
-  plantuml-server:
-    image: plantuml/plantuml-server:jetty
-    ports:
-      - 8080:8080
-    environment:
-      - BASE_URL=plantuml2
-
-  app:
-    container_name: django-app
-    restart: always
-    volumes:
-      - ./infra_crawler:/infra_crawler
-      - static_volume:/infra_crawler/app/staticfiles
-
+    prometheus:
+        image: prom/prometheus
+        container_name: prometheus
+        command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+        ports:
+            - 9090:9090
+        restart: unless-stopped
+        volumes:
+            - ./prometheus:/etc/prometheus:ro
+            - prom_data:/prometheus:rw
+        networks:
+            back-tier:
+                alias:
+                    - database
+            admin:
+                alias:
+                    - mysql
+            undefined:
+                alias:
+                    - unknown
+    grafana:
+        image: grafana/grafana
+        container_name: grafana
+        ports:
+            - target: 80
+              host_ip: 127.0.0.1
+              published: 8080
+              protocol: tcp
+              mode: host
+            - target: 8000
+              host_ip: 127.0.0.1
+              published: 8000-9000
+              protocol: tcp
+              mode: host
+        restart: unless-stopped
+        environment:
+            - GF_SECURITY_ADMIN_USER=admin
+            - GF_SECURITY_ADMIN_PASSWORD=grafana
+        volumes:
+            - type: volume
+              source: ./grafana
+              target: /etc/grafana/provisioning/datasources
+              read_only: true
+              volume:
+                - nocopy: true
+        networks:
+            - front-tier:
+                alias:
+                    - ui
+            - back-tier:
+    datadog:
+        image: datadog/datadog
 volumes:
-  static_volume:
+    prom_data:
+networks:
+    front-tier:
+        external: true
+        name: front-end-net
+        driver: overlay
+    back-tier:
+        name: back-end-net
+        internal: true
+        labels:
+            - "com.example.description=Financial transaction network"
+            - "com.example.department=Finance"
+            - "com.example-label-with-empty-value"
+    admin:
+        attachable: true
+        enable_ipv6: false
+        labels:
+            com.example.description: "Financial transaction network"
+            com.example.department: "Finance"
+            com.example.label-with-empty-value: ""
+
+# version: '2'
+# services:
+#   plantuml-server:
+#     image: plantuml/plantuml-server:jetty
+#     ports:
+#       - 8080:8080
+#     environment:
+#       - BASE_URL=plantuml
+
+#   zookeeper:
+#     image: confluentinc/cp-zookeeper:latest
+#     environment:
+#       ZOOKEEPER_CLIENT_PORT: 2181
+#       ZOOKEEPER_TICK_TIME: 2000
+#     ports:
+#       - 22181:2181
+
+#   kafka:
+#     image: confluentinc/cp-kafka:latest
+#     depends_on:
+#       - zookeeper
+#     ports:
+#       - 29092:29092
+#     environment:
+#       KAFKA_BROKER_ID: 1
+#       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+#       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+#       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+#       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+#       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+#   app:
+#     container_name: django-app
+#     depends_on:
+#       - kafka
+#       - plantuml-server
+#     build:
+#       context: ./local-env/app-server/
+#     expose:
+#       - 8000
+#     env_file:
+#       - ./.env
+#     restart: always
+#     volumes:
+#       - ./infra_crawler:/infra_crawler
+#       - static_volume:/infra_crawler/app/staticfiles
+
+#   nginx:
+#     container_name: nginx-server
+#     build:
+#       context: ./local-env/nginx/
+#     env_file:
+#       - ./local-env/.certconf.env
+#     ports:
+#       - 443:443
+#       - 80:80
+#     depends_on:
+#       - app
+#     volumes:
+#       - static_volume:/infra_crawler/app/staticfiles
+#       - letsencrypt_certs:/etc/letsencrypt
+#       - certbot_acme_challenge:/var/www/certbot
+#       - ./local-env/vhosts:/etc/nginx/vhosts
+#     restart: unless-stopped
+
+#   certbot:
+#     container_name: certs
+#     build:
+#       context: ./local-env/certbot/
+#     env_file:
+#       - ./local-env/.certconf.env
+#     volumes:
+#       - letsencrypt_certs:/etc/letsencrypt
+#       - certbot_acme_challenge:/var/www/certbot
+
+#   cron:
+#     build: ./local-env/cron/
+#     environment:
+#       COMPOSE_PROJECT_NAME: "${COMPOSE_PROJECT_NAME}"
+#     volumes:
+#       - /var/run/docker.sock:/var/run/docker.sock
+#       - ./:/workdir:ro
+#     restart: unless-stopped
+
+# volumes:
+#   static_volume:
+#   nginx_conf:
+#   letsencrypt_certs:
+#   certbot_acme_challenge:
